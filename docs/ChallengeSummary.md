@@ -18,7 +18,17 @@ Two environments consuming the VNET module:
 | VNET CIDR | 10.0.0.0/16 | 10.1.0.0/16 |
 | Storage replication | LRS | GRS |
 
-Each environment provisions: Resource Group, VNET, Subnets, NSGs, Linux VM (Ubuntu 22.04, SSH-only auth), Public IP, Storage Account with blob container.
+Each environment provisions: Resource Group, VNET, Subnets, NSGs, Linux VM (Ubuntu 22.04, SSH-only auth, boot diagnostics), Public IP, Storage Account with blob container, Log Analytics Workspace, NSG Flow Logs, and Azure Monitor Agent.
+
+## NSG Flow Logs
+
+Flow logs enabled on every NSG to audit network traffic. Logs are stored in the environment's storage account with 30-day retention and Traffic Analytics enabled via Log Analytics.
+
+## Monitoring & Log Analytics
+
+- **Log Analytics Workspace** (`law-{project}-{env}-{region}`) per environment with 30-day retention
+- **Azure Monitor Agent** installed on each VM via `azurerm_virtual_machine_extension`
+- **Boot diagnostics** enabled on VMs, stored in the environment's storage account
 
 ## Naming Convention & Tagging
 
