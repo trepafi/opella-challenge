@@ -18,13 +18,9 @@ env:
   TF_VERSION: "1.9.0"
 
 jobs:
-  plan:
-    name: Plan (${{ matrix.environment }})
+  plan-dev:
+    name: Plan (dev)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [dev, prod]
 
     steps:
       - name: Checkout
@@ -35,21 +31,137 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: environments/dev/.terraform
+          key: tf-dev-${{ hashFiles('environments/dev/.terraform.lock.hcl') }}
+
       - name: Terraform Format Check
-        working-directory: environments/${{ matrix.environment }}
+        working-directory: environments/dev
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
-        working-directory: environments/${{ matrix.environment }}
+        working-directory: environments/dev
         run: terraform init
 
       - name: Terraform Validate
-        working-directory: environments/${{ matrix.environment }}
+        working-directory: environments/dev
         run: terraform validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint
+        run: tflint --init --config .tflint.hcl
+
+      - name: Run TFLint
+        working-directory: environments/dev
+        run: tflint --config ../../.tflint.hcl
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: environments/dev
+          framework: terraform
+          quiet: true
+          soft_fail: true
 
       - name: Terraform Plan
         id: plan
-        working-directory: environments/${{ matrix.environment }}
+        working-directory: environments/dev
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        continue-on-error: true
+
+      - name: Post Plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('environments/dev/plan_output.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n\n... truncated ...' : plan;
+            const outcome = '${{ steps.plan.outcome }}';
+
+            const body = `### Terraform Plan — \`dev\` ${outcome === 'success' ? '✅' : '❌'}
+
+            <details><summary>Show plan output</summary>
+
+            \`\`\`
+            ${truncated}
+            \`\`\`
+
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  plan-prod:
+    name: Plan (prod)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: environments/prod/.terraform
+          key: tf-prod-${{ hashFiles('environments/prod/.terraform.lock.hcl') }}
+
+      - name: Terraform Format Check
+        working-directory: environments/prod
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: environments/prod
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: environments/prod
+        run: terraform validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint
+        run: tflint --init --config .tflint.hcl
+
+      - name: Run TFLint
+        working-directory: environments/prod
+        run: tflint --config ../../.tflint.hcl
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: environments/prod
+          framework: terraform
+          quiet: true
+          soft_fail: true
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: environments/prod
         run: |
           terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
         continue-on-error: true
@@ -59,11 +171,11 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('environments/${{ matrix.environment }}/plan_output.txt', 'utf8');
+            const plan = fs.readFileSync('environments/prod/plan_output.txt', 'utf8');
             const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n\n... truncated ...' : plan;
             const outcome = '${{ steps.plan.outcome }}';
 
-            const body = `### Terraform Plan — \`${{ matrix.environment }}\` ${outcome === 'success' ? '✅' : '❌'}
+            const body = `### Terraform Plan — \`prod\` ${outcome === 'success' ? '✅' : '❌'}
 
             <details><summary>Show plan output</summary>
 
