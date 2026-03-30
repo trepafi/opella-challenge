@@ -130,6 +130,45 @@ run "subnet_without_rules_gets_nsg" {
   }
 }
 
+# Test: Flow logs disabled by default
+run "flow_logs_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(azurerm_network_watcher.this) == 0
+    error_message = "Network watcher should not be created when flow_logs is null"
+  }
+
+  assert {
+    condition     = length(azurerm_network_watcher_flow_log.this) == 0
+    error_message = "Flow logs should not be created when flow_logs is null"
+  }
+}
+
+# Test: Flow logs created when enabled
+run "flow_logs_enabled" {
+  command = plan
+
+  variables {
+    flow_logs = {
+      storage_account_id                  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Storage/storageAccounts/sttest"
+      retention_days                      = 30
+      log_analytics_workspace_id          = "00000000-0000-0000-0000-000000000000"
+      log_analytics_workspace_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.OperationalInsights/workspaces/law-test"
+    }
+  }
+
+  assert {
+    condition     = length(azurerm_network_watcher.this) == 1
+    error_message = "Network watcher should be created when flow_logs is enabled"
+  }
+
+  assert {
+    condition     = length(azurerm_network_watcher_flow_log.this) == 2
+    error_message = "Expected 1 flow log per subnet (2 total)"
+  }
+}
+
 # Test: VNET name validation (too short)
 run "vnet_name_validation_too_short" {
   command = plan
