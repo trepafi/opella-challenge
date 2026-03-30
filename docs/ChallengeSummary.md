@@ -36,6 +36,71 @@ All resources follow a consistent naming pattern computed via a shared `locals` 
 
 All resources are tagged with four mandatory tags: `environment`, `project`, `owner`, `managed_by`. Tags are passed to modules via a shared `tags` variable.
 
+## Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Azure Subscription"
+        subgraph "rg-opella-tfstate"
+            SA_STATE[Storage Account<br/>stopellatfstatelubert]
+            BLOB_STATE[Blob Container<br/>tfstate]
+        end
+
+        subgraph "rg-opella-dev-eastus"
+            subgraph "vnet-opella-dev-eastus (10.0.0.0/16)"
+                subgraph "default (10.0.0.0/24)"
+                    NSG_DEF_D[NSG: deny-all-in]
+                end
+                subgraph "vm (10.0.1.0/24)"
+                    NSG_VM_D[NSG: allow SSH]
+                    NIC_D[NIC] --> VM_D[Linux VM<br/>Standard_B1s]
+                end
+            end
+            PIP_D[Public IP] --> NIC_D
+            ST_D[Storage Account<br/>stopelladeveastus] --> CONT_D[Blob: data]
+        end
+
+        subgraph "rg-opella-prod-westeurope"
+            subgraph "vnet-opella-prod-westeurope (10.1.0.0/16)"
+                subgraph "default (10.1.0.0/24) "
+                    NSG_DEF_P[NSG: deny-all-in]
+                end
+                subgraph "vm (10.1.1.0/24) "
+                    NSG_VM_P[NSG: allow SSH from VNET]
+                    NIC_P[NIC] --> VM_P[Linux VM<br/>Standard_B1s]
+                end
+            end
+            PIP_P[Public IP] --> NIC_P
+            ST_P[Storage Account<br/>stopellaprodwesteurope] --> CONT_P[Blob: data]
+        end
+    end
+```
+
+## CI/CD Flow
+
+```mermaid
+graph LR
+    A[Feature Branch] -->|push| B[Pull Request]
+    B -->|auto| C[Terraform Plan<br/>dev + prod]
+    C --> D{Review & Approve}
+    D -->|merge to master| E[Plan dev<br/>auto on push]
+    E --> F[Apply dev<br/>manual trigger]
+    F --> G[Apply prod<br/>manual trigger]
+
+    subgraph "Plan Steps"
+        C1[fmt check] --> C2[init] --> C3[validate] --> C4[tflint] --> C5[checkov] --> C6[plan]
+    end
+```
+
+## Release Lifecycle
+
+1. **Develop** — create a feature branch, make changes
+2. **Pull Request** — plan runs automatically for both dev and prod, results posted as PR comments
+3. **Review** — team reviews plan output and code changes
+4. **Merge** — merge to `master`, dev plan runs automatically on push
+5. **Deploy Dev** — manually trigger apply workflow, select `dev`
+6. **Deploy Prod** — manually trigger apply workflow, select `prod`
+
 ## Remote State (`scripts/bootstrap-state.sh`)
 
 Terraform state stored in Azure Blob Storage (`stopellatfstatelubert`) with per-environment state files. Bootstrap script provisions the storage account.
@@ -68,3 +133,29 @@ brew install terraform-docs tflint
 pre-commit install
 pre-commit run --all-files
 ```
+
+## Terragrunt Compatibility
+
+The codebase is structured so Terragrunt can be layered on without refactoring:
+
+- **Modules are self-contained** — no cross-module dependencies via data sources
+- **Environment configs use only variables** — no hardcoded values in `main.tf`
+- **All backend config is parameterizable** — resource group, storage account, container, and key
+- **Relative module paths** (`../../modules/vnet`) — compatible with both direct use and Terragrunt
+
+Terragrunt would replace the `environments/` structure with a DRY hierarchy. Example:
+
+```
+terragrunt/
+├── terragrunt.hcl              # root config (backend, provider)
+├── dev/
+│   ├── env.hcl                 # environment-level vars
+│   └── vnet/
+│       └── terragrunt.hcl      # module invocation
+└── prod/
+    ├── env.hcl
+    └── vnet/
+        └── terragrunt.hcl
+```
+
+See [`terragrunt/`](../terragrunt/) for example configuration files.
