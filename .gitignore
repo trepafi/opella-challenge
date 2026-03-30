@@ -3,6 +3,7 @@
 
 # Terraform
 .terraform/
+.terragrunt-cache/
 *.tfstate
 *.tfstate.backup
 *.tfvars.secret
