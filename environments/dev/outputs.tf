@@ -56,3 +56,12 @@ output "storage_container_name" {
   description = "Name of the blob container"
   value       = azurerm_storage_container.data.name
 }
+
+# -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+
+output "log_analytics_workspace_id" {
+  description = "The ID of the Log Analytics workspace"
+  value       = azurerm_log_analytics_workspace.this.id
+}

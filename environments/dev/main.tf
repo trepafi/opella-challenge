@@ -33,6 +33,13 @@ module "vnet" {
   resource_group_name = azurerm_resource_group.this.name
   subnets             = var.subnets
   tags                = local.common_tags
+
+  flow_logs = {
+    storage_account_id                  = azurerm_storage_account.this.id
+    retention_days                      = 30
+    log_analytics_workspace_id          = azurerm_log_analytics_workspace.this.workspace_id
+    log_analytics_workspace_resource_id = azurerm_log_analytics_workspace.this.id
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -92,12 +99,18 @@ resource "azurerm_linux_virtual_machine" "this" {
     name                 = "osdisk-vm-${local.name_prefix}"
   }
 
+  boot_diagnostics {
+    storage_account_uri = azurerm_storage_account.this.primary_blob_endpoint
+  }
+
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
     sku       = "22_04-lts"
     version   = "latest"
   }
+
+  depends_on = [azurerm_storage_account.this]
 }
 
 # -----------------------------------------------------------------------------
@@ -125,4 +138,31 @@ resource "azurerm_storage_container" "data" {
   name                  = "data"
   storage_account_name  = azurerm_storage_account.this.name
   container_access_type = "private"
+}
+
+# -----------------------------------------------------------------------------
+# Log Analytics Workspace
+# -----------------------------------------------------------------------------
+
+resource "azurerm_log_analytics_workspace" "this" {
+  name                = "law-${local.name_prefix}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = local.common_tags
+}
+
+# -----------------------------------------------------------------------------
+# VM Monitoring
+# -----------------------------------------------------------------------------
+
+resource "azurerm_virtual_machine_extension" "azure_monitor" {
+  name                       = "AzureMonitorLinuxAgent"
+  virtual_machine_id         = azurerm_linux_virtual_machine.this.id
+  publisher                  = "Microsoft.Azure.Monitor"
+  type                       = "AzureMonitorLinuxAgent"
+  type_handler_version       = "1.0"
+  auto_upgrade_minor_version = true
+  tags                       = local.common_tags
 }
