@@ -121,3 +121,45 @@ resource "azurerm_subnet_network_security_group_association" "this" {
   subnet_id                 = azurerm_subnet.this[each.key].id
   network_security_group_id = azurerm_network_security_group.this[each.key].id
 }
+
+# -----------------------------------------------------------------------------
+# NSG Flow Logs
+# -----------------------------------------------------------------------------
+
+resource "azurerm_network_watcher" "this" {
+  count = var.flow_logs != null ? 1 : 0
+
+  name                = "nw-${var.vnet_name}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_network_watcher_flow_log" "this" {
+  for_each = var.flow_logs != null ? var.subnets : {}
+
+  name                      = "flowlog-${each.key}"
+  network_watcher_name      = azurerm_network_watcher.this[0].name
+  resource_group_name       = var.resource_group_name
+  network_security_group_id = azurerm_network_security_group.this[each.key].id
+  storage_account_id        = var.flow_logs.storage_account_id
+  enabled                   = true
+
+  retention_policy {
+    enabled = true
+    days    = var.flow_logs.retention_days
+  }
+
+  dynamic "traffic_analytics" {
+    for_each = var.flow_logs.log_analytics_workspace_id != null ? [1] : []
+    content {
+      enabled               = true
+      workspace_id          = var.flow_logs.log_analytics_workspace_id
+      workspace_region      = var.location
+      workspace_resource_id = var.flow_logs.log_analytics_workspace_resource_id
+      interval_in_minutes   = 10
+    }
+  }
+
+  tags = var.tags
+}

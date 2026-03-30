@@ -50,3 +50,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "flow_logs" {
+  description = "Optional NSG flow log configuration. Set to null to disable."
+  type = object({
+    storage_account_id                = string
+    retention_days                    = number
+    log_analytics_workspace_id        = optional(string)
+    log_analytics_workspace_resource_id = optional(string)
+  })
+  default = null
+}
