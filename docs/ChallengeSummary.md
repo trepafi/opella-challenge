@@ -147,7 +147,7 @@ Terragrunt would replace the `environments/` structure with a DRY hierarchy. Exa
 
 ```
 terragrunt/
-├── terragrunt.hcl              # root config (backend, provider)
+├── root.hcl                    # root config (backend, provider)
 ├── dev/
 │   ├── env.hcl                 # environment-level vars
 │   └── vnet/
@@ -159,3 +159,7 @@ terragrunt/
 ```
 
 See [`terragrunt/`](../terragrunt/) for example configuration files.
+
+Validated successfully — backend initialized, configuration valid:
+
+![Terragrunt validate](assets/terragrunt-validate.png)
