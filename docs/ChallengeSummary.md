@@ -20,7 +20,21 @@ Two environments consuming the VNET module:
 
 Each environment provisions: Resource Group, VNET, Subnets, NSGs, Linux VM (Ubuntu 22.04, SSH-only auth), Public IP, Storage Account with blob container.
 
-All resources follow the naming convention `{type}-{project}-{env}-{region}` and are tagged with `environment`, `project`, `owner`, and `managed_by`.
+## Naming Convention & Tagging
+
+All resources follow a consistent naming pattern computed via a shared `locals` block:
+
+| Resource Type | Pattern | Example |
+|---|---|---|
+| Resource Group | `rg-{project}-{env}-{region}` | `rg-opella-dev-eastus` |
+| Virtual Network | `vnet-{project}-{env}-{region}` | `vnet-opella-dev-eastus` |
+| NSG | `nsg-{subnet_name}` | `nsg-vm` |
+| Public IP | `pip-vm-{project}-{env}-{region}` | `pip-vm-opella-dev-eastus` |
+| NIC | `nic-vm-{project}-{env}-{region}` | `nic-vm-opella-dev-eastus` |
+| VM | `vm-{project}-{env}-{region}` | `vm-opella-dev-eastus` |
+| Storage Account | `st{project}{env}{region}` | `stopelladeveastus` |
+
+All resources are tagged with four mandatory tags: `environment`, `project`, `owner`, `managed_by`. Tags are passed to modules via a shared `tags` variable.
 
 ## Remote State (`scripts/bootstrap-state.sh`)
 
@@ -33,8 +47,24 @@ Terraform state stored in Azure Blob Storage (`stopellatfstatelubert`) with per-
 
 See [GHubActions.md](GHubActions.md) for details and proof of execution.
 
+## VNET Module Tests (`modules/vnet/tests/`)
+
+Native Terraform tests (`terraform test`) with 8 test cases covering: VNET creation, subnet count, NSG creation, custom rules, NSG-subnet associations, tag propagation, secure-by-default baseline, and input validation.
+
+Run locally with: `cd modules/vnet && terraform test`
+
+![Passing tests](assets/passing-tests.png)
+
 ## Code Quality
 
 - **Pre-commit hooks**: `terraform fmt`, `terraform validate`, `terraform-docs`, `tflint`, `checkov`
 - **TFLint**: Azure ruleset with naming convention and documentation rules
 - **Checkov**: Static security scanning integrated in CI
+
+Setup:
+```bash
+pip install pre-commit checkov
+brew install terraform-docs tflint
+pre-commit install
+pre-commit run --all-files
+```
